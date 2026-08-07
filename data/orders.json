@@ -1,0 +1,14 @@
+{
+  "orders": [
+    {"order_id": "ORD-1001", "description": "Wireless Noise-Cancelling Earbuds",
+     "value": 79.99, "owner_name": "Priya Sharma", "owner_email": "priya@example.com"},
+    {"order_id": "ORD-1002", "description": "27-inch 4K Monitor",
+     "value": 349.00, "owner_name": "Rahul Verma", "owner_email": "rahul@example.com"},
+    {"order_id": "ORD-1003", "description": "Gaming Laptop (RTX build)",
+     "value": 2499.00, "owner_name": "Priya Sharma", "owner_email": "priya@example.com"},
+    {"order_id": "ORD-1004", "description": "Annual Cloud Storage Plan",
+     "value": 199.00, "owner_name": "Aisha Khan", "owner_email": "aisha@example.com"},
+    {"order_id": "ORD-1005", "description": "Flagship Smartphone",
+     "value": 1099.00, "owner_name": "Rahul Verma", "owner_email": "rahul@example.com"}
+  ]
+}

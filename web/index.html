@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CX Micro-Intent Router — Triage Dashboard</title>
+<style>
+  :root{
+    --bg:#0f1720; --panel:#16212e; --line:#26384a; --ink:#e7eef6; --muted:#8aa0b4;
+    --accent:#3ecf8e; --faq:#6ea8fe; --empathy:#c88cff; --transaction:#ffb454; --handoff:#ff7a7a;
+  }
+  *{box-sizing:border-box} body{margin:0;font:14px/1.5 system-ui,Segoe UI,Roboto,sans-serif;
+    background:var(--bg);color:var(--ink);height:100vh;display:flex;flex-direction:column}
+  header{padding:14px 20px;border-bottom:1px solid var(--line);display:flex;
+    align-items:center;gap:14px}
+  header h1{font-size:16px;margin:0} header .sub{color:var(--muted);font-size:12px}
+  header .who{margin-left:auto;display:flex;align-items:center;gap:8px}
+  select{background:var(--panel);color:var(--ink);border:1px solid var(--line);
+    border-radius:8px;padding:6px 10px}
+  main{flex:1;display:grid;grid-template-columns:230px 1fr 320px;min-height:0}
+  .col{border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+  .col h2{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);
+    margin:0;padding:14px 16px 8px}
+  .orders{padding:0 12px 12px;overflow:auto}
+  .order{background:var(--panel);border:1px solid var(--line);border-radius:10px;
+    padding:10px 12px;margin:8px 0}
+  .order b{display:block} .order .v{color:var(--accent);font-weight:600}
+  .order small{color:var(--muted)}
+  #chat{flex:1;overflow:auto;padding:18px 20px;display:flex;flex-direction:column;gap:12px}
+  .msg{max-width:78%;padding:10px 14px;border-radius:14px;white-space:pre-wrap}
+  .user{align-self:flex-end;background:#243449;border-bottom-right-radius:4px}
+  .bot{align-self:flex-start;background:var(--panel);border:1px solid var(--line);
+    border-bottom-left-radius:4px}
+  .composer{display:flex;gap:10px;padding:14px 20px;border-top:1px solid var(--line)}
+  .composer input{flex:1;background:var(--panel);border:1px solid var(--line);color:var(--ink);
+    border-radius:10px;padding:12px 14px;font-size:14px}
+  .composer button{background:var(--accent);color:#08110b;border:0;border-radius:10px;
+    padding:0 20px;font-weight:700;cursor:pointer}
+  .composer button:disabled{opacity:.5;cursor:default}
+  .trace{padding:14px 16px;overflow:auto}
+  .badge{display:inline-block;padding:3px 10px;border-radius:999px;font-weight:700;font-size:12px}
+  .b-faq{background:rgba(110,168,254,.15);color:var(--faq)}
+  .b-empathy{background:rgba(200,140,255,.15);color:var(--empathy)}
+  .b-transaction{background:rgba(255,180,84,.15);color:var(--transaction)}
+  .b-handoff{background:rgba(255,122,122,.15);color:var(--handoff)}
+  .row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px dashed var(--line)}
+  .row span:first-child{color:var(--muted)}
+  .reason{color:var(--muted);font-size:12.5px;margin-top:8px}
+  .flag{display:inline-block;background:rgba(255,122,122,.15);color:var(--handoff);
+    border-radius:6px;padding:2px 8px;margin:2px 4px 0 0;font-size:12px}
+  .hint{color:var(--muted);font-size:12px;padding:0 16px 14px}
+</style>
+</head>
+<body>
+<header>
+  <h1>CX Micro-Intent Router</h1>
+  <span class="sub">the triage nurse before the bot</span>
+  <div class="who">
+    <span class="sub">logged in as</span>
+    <select id="user"></select>
+  </div>
+</header>
+
+<main>
+  <div class="col">
+    <h2>Your Orders</h2>
+    <div class="orders" id="orders"></div>
+    <div class="hint">Ownership is verified before any account action.</div>
+  </div>
+
+  <div class="col" style="border-right:1px solid var(--line)">
+    <div id="chat"></div>
+    <form class="composer" id="form">
+      <input id="input" autocomplete="off" placeholder="Type a customer message…" />
+      <button id="send">Send</button>
+    </form>
+  </div>
+
+  <div class="trace">
+    <h2>Decision Trace</h2>
+    <div id="trace"><p class="reason">Send a message to see how it is routed.</p></div>
+  </div>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+let currentUser = null;
+
+async function loadUsers(){
+  const users = await (await fetch('/api/users')).json();
+  const sel = $('#user');
+  sel.innerHTML = users.map(u => `<option value="${u.email}">${u.name}</option>`).join('');
+  sel.onchange = () => { currentUser = sel.value; loadOrders(); };
+  currentUser = users[0]?.email; loadOrders();
+}
+async function loadOrders(){
+  const orders = await (await fetch('/api/orders?owner=' + encodeURIComponent(currentUser))).json();
+  $('#orders').innerHTML = orders.map(o => `
+    <div class="order"><b>${o.order_id}</b><small>${o.description}</small>
+      <div class="v">$${o.value.toLocaleString(undefined,{minimumFractionDigits:2})}</div></div>`).join('');
+}
+function bubble(text, who){
+  const d = document.createElement('div'); d.className = 'msg ' + who; d.textContent = text;
+  $('#chat').appendChild(d); $('#chat').scrollTop = $('#chat').scrollHeight; return d;
+}
+function sentimentColor(s){
+  return {positive:'#3ecf8e',neutral:'#8aa0b4',frustrated:'#ffb454',
+          angry:'#ff7a7a',distressed:'#ff5c8a'}[s] || '#8aa0b4';
+}
+function renderTrace(t){
+  const cls = 'b-' + (t.intent || t.agent || 'handoff');
+  const flags = (t.guardrail_blocks || []).map(f => `<span class="flag">${f}</span>`).join('');
+  const churn = t.churn_risk
+    ? `<p style="background:rgba(255,92,138,.15);color:#ff5c8a;border-radius:8px;
+         padding:8px 10px;font-weight:700">⚠ churn risk — fast-tracked to a human</p>` : '';
+  const sc = sentimentColor(t.sentiment);
+  $('#trace').innerHTML = `
+    <p><span class="badge ${cls}">${(t.intent || t.agent || 'handoff').toUpperCase()}</span>
+       ${t.escalated ? '<span class="flag">escalated → human</span>' : ''}</p>
+    ${churn}
+    <div class="row"><span>sentiment</span>
+      <span style="color:${sc};font-weight:600">${t.sentiment ?? '—'}
+        ${t.sentiment_intensity != null ? '· ' + t.sentiment_intensity.toFixed(2) : ''}</span></div>
+    <div class="row"><span>confidence</span><span>${t.confidence ?? '—'}</span></div>
+    <div class="row"><span>agent</span><span>${t.agent ?? '—'}</span></div>
+    <div class="row"><span>outcome</span><span style="text-align:right;max-width:190px">${t.outcome ?? '—'}</span></div>
+    <div class="row"><span>latency</span><span>${t.latency_ms ?? '—'} ms</span></div>
+    <div class="row"><span>cost</span><span>$${(t.cost ?? 0).toFixed(5)}</span></div>
+    ${t.fallback_used ? '<div class="row"><span>fallback</span><span>used</span></div>' : ''}
+    ${flags ? `<p>${flags}</p>` : ''}
+    ${t.router_reason ? `<p class="reason">${t.router_reason}</p>` : ''}`;
+}
+$('#form').onsubmit = async e => {
+  e.preventDefault();
+  const input = $('#input'); const text = input.value.trim(); if(!text) return;
+  input.value=''; $('#send').disabled = true;
+  bubble(text, 'user');
+  const thinking = bubble('…', 'bot');
+  try{
+    const res = await fetch('/api/chat', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({message: text, user: currentUser})});
+    const data = await res.json();
+    thinking.textContent = data.reply;
+    renderTrace(data);
+  }catch(err){ thinking.textContent = '[error contacting server]'; }
+  $('#send').disabled = false; input.focus();
+};
+loadUsers();
+</script>
+</body>
+</html>

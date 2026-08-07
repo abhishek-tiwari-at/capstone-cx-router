@@ -1,0 +1,20 @@
+# secrets — never commit the real key
+.env
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# generated runtime data
+data/events.jsonl
+data/idempotency.json
+data/kb_index.pkl
+data/demo_cache.json
+data/resilience_runs.json
+
+# course material (do not redistribute) & scratch
+Day-9_*.pdf
+image.png
