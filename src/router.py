@@ -41,7 +41,14 @@ def _system_prompt() -> str:
     lines += [
         "",
         "Rules:",
-        "- Judge the ACTION needed, not just the topic.",
+        "- Judge the ACTION needed, not just the topic. Topic words like 'refund' "
+        "  or 'cancel' do NOT by themselves mean 'transaction' — ask whether the "
+        "  customer wants INFORMATION (-> faq) or wants us to DO something now "
+        "  (-> transaction).",
+        "  e.g. 'how long will my refund take' -> faq (asking about timing/policy).",
+        "  e.g. 'how do I cancel my subscription' -> faq (asking how-to/policy).",
+        "  e.g. 'please refund my order #123' -> transaction (asking us to act).",
+        "  e.g. 'cancel my subscription' -> transaction (asking us to act).",
         "- Warm, positive, or appreciative messages (thanks, compliments, "
         "  'I love you guys', friendly chit-chat) with no task are 'empathy' —",
         "  respond warmly. Never escalate a happy customer to a human.",

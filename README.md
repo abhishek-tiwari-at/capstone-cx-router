@@ -73,7 +73,7 @@ python view_logs.py        # last 15 governed decisions (PII redacted)
 **The problem.** LLM customer-experience bots fail in two opposite ways:
 - **Over-automation** — one "do-everything" bot hallucinates answers, over-promises
   ("I've refunded you"), takes unsafe account actions, and mishandles emotional cases.
-- **Under-automation** — sending everything to humans is slow and expensive.
+- **Under-automation**  sending everything to humans is slow and expensive.
 
 Neither knows *when it should not act*. The #1 blocker to deploying LLMs on real
 customers isn't capability — it's **trust**: hallucinations, unsafe actions, and

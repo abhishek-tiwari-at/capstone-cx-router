@@ -49,13 +49,19 @@ IDEMPOTENCY_TTL_HOURS = float(os.getenv("IDEMPOTENCY_TTL_HOURS", "24"))
 # The 4 router buckets. These are ACTIONS, not topics. Keep descriptions tight —
 # they are injected into the router prompt verbatim.
 INTENTS: dict[str, str] = {
-    "faq": "General/how-to questions answerable from a knowledge base "
-           "(policies, product info, billing explanations). No account change needed.",
+    "faq": "General/how-to questions answerable from a knowledge base (policies, "
+           "product info, billing explanations) — including questions ABOUT "
+           "refunds, cancellations, or plan changes (e.g. 'how long does a refund "
+           "take', 'how do I cancel', 'what's your cancellation policy'). No "
+           "account change is requested — the customer wants information, not action.",
     "empathy": "Emotionally-toned messages where tone matters more than any task: "
                "frustration/distress to de-escalate, OR positive appreciation, "
                "thanks, compliments, and friendly chit-chat to acknowledge warmly.",
-    "transaction": "Requests to take an account action: cancel, refund, change "
-                   "plan, update details. Has real-world side effects.",
+    "transaction": "An explicit REQUEST to take an account action right now: "
+                   "'cancel my subscription', 'refund my order', 'change my plan', "
+                   "'update my address'. Has real-world side effects. Mentioning "
+                   "the word refund/cancel is not enough — the customer must be "
+                   "asking us to DO it, not asking about it.",
     "handoff": "Complex, ambiguous, high-risk, or out-of-scope cases that a bot "
                "should not attempt. When unsure, route here.",
 }
