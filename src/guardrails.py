@@ -36,6 +36,15 @@ _UNSAFE_OUTPUT_PROMISES = [
 ]
 
 
+def detect_pii(text: str) -> list[str]:
+    """Detect what types of PII are in the text. Returns list of PII types found."""
+    pii_types = []
+    for label, pattern in _PII_PATTERNS:
+        if pattern.search(text):
+            pii_types.append(f"[{label}]")
+    return pii_types
+
+
 def redact_pii(text: str) -> str:
     """Replace PII spans with typed placeholders, e.g. [EMAIL]. Safe for logs."""
     redacted = text
@@ -56,7 +65,7 @@ def check_input(text: str) -> InputCheck:
     lowered = text.lower()
     flags = [m for m in _INJECTION_MARKERS if m in lowered]
     if flags:
-        return InputCheck(allowed=False, reason="possible_prompt_injection", flags=flags)
+        return InputCheck(allowed=False, reason="injection_attempt", flags=flags)
     if not text.strip():
         return InputCheck(allowed=False, reason="empty_message")
     return InputCheck(allowed=True)

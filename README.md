@@ -13,15 +13,16 @@ and the **source material for the pitch deck**. Section headers map to the deck.
 
 ## Table of contents
 1. [Quick start (run it in 5 minutes)](#1-quick-start-run-it-in-5-minutes)
-2. [DECK 2 — Problem & business context](#deck-2--problem--business-context)
-3. [DECK 3 — Solution overview](#deck-3--solution-overview)
-4. [DECK 4 — Architecture & tech stack](#deck-4--architecture--tech-stack)
-5. [DECK 5 — Solution in action (demo script)](#deck-5--solution-in-action-demo-script)
-6. [DECK 6 — Outputs & evidence](#deck-6--outputs--evidence)
-7. [DECK 7 — Business value & scale-up path](#deck-7--business-value--scale-up-path)
-8. [Repo layout](#repo-layout)
-9. [Configuration knobs](#configuration-knobs)
-10. [Honest limitations](#honest-limitations)
+2. [NEW: The Feedback Loop — Closing the AI blind spots](#new-the-feedback-loop--closing-the-ai-blind-spots)
+3. [DECK 2 — Problem & business context](#deck-2--problem--business-context)
+4. [DECK 3 — Solution overview](#deck-3--solution-overview)
+5. [DECK 4 — Architecture & tech stack](#deck-4--architecture--tech-stack)
+6. [DECK 5 — Solution in action (demo script)](#deck-5--solution-in-action-demo-script)
+7. [DECK 6 — Outputs & evidence](#deck-6--outputs--evidence)
+8. [DECK 7 — Business value & scale-up path](#deck-7--business-value--scale-up-path)
+9. [Repo layout](#repo-layout)
+10. [Configuration knobs](#configuration-knobs)
+11. [Honest limitations](#honest-limitations)
 
 ---
 
@@ -65,6 +66,70 @@ python view_logs.py        # last 15 governed decisions (PII redacted)
 > → `cp .env.example .env` (add key) → `python scripts/build_kb.py`. Generated files
 > (`data/events.jsonl`, `data/kb_index.pkl`, `data/idempotency.json`,
 > `data/demo_cache.json`) are gitignored and rebuilt locally.
+
+---
+
+## NEW: The Feedback Loop — Closing the AI blind spots
+
+**The insight:** Every AI system fails on edge cases. The difference between a prototype and an enterprise system isn't that it never fails — it's that it *surfaces failures*, learns from them, and gets better.
+
+This layer sits *outside* the core router and turns every failure into an improvement opportunity.
+
+### What it does
+
+```
+Every message flows through the pipeline → produces a trace
+↓
+Case Review watches for failures:
+  • FAQ abstentions (customer asked something KB doesn't cover)
+  • Low-confidence escalations (router unsure, escalated to human)
+  • Churn risk flags (angry customer, fast-tracked to human)
+  • Guardrail blocks (PII, injection, fraud attempts)
+  • Fallback usage (system had to degrade gracefully)
+↓
+Analytics Dashboard shows 24-hour metrics:
+  • Messages tested vs. cases reviewed (the gap = potential)
+  • Knowledge-base gaps by frequency (what customers ask, bot can't answer)
+  • Escalation breakdown (why customers went to humans)
+↓
+KB Suggestion Engine:
+  • Detects FAQ abstentions
+  • Auto-generates doc skeletons
+  • Human writes the answer → system re-indexes
+  • Next customer with same question gets instant answer
+↓
+Replay & Metrics:
+  • Run 10-ticket test before/after improvement
+  • Measure: cost, latency, escalation rate, resolution rate
+  • Prove ROI of adding a KB doc or tuning a threshold
+↓
+Governance & Red-Team:
+  • Run 6 security tests: IDOR, injection, PII, spoofing, social eng, churn
+  • Validate ownership checks, guardrail blocks, policy limits
+```
+
+### How this helps CX (practical view)
+
+**For customers:**
+- **Faster answers** — KB gets better coverage. Today customer waits 5 min for human; tomorrow same question gets instant answer.
+- **No repeated problems** — When one customer triggers a gap, the system flags it. Next customer with the same issue gets the answer.
+- **Protected privacy** — PII detection blocks credit cards from logs. Security tests prevent IDOR attacks.
+- **Immediate help when needed** — Churn risk detection sends angry customers straight to a human instead of bot runaround.
+
+**For the company:**
+- **Visibility into failures** — See which questions the bot can't answer; which escalations are happening.
+- **Measurable improvement** — Replay tests prove that adding a KB doc actually reduces escalations + cost.
+- **Safe iteration** — Red-team tests catch regressions (IDOR blocks still working? PII still redacted?).
+- **Compliance** — Full audit trail, ownership checks, policy limits in code.
+
+### The dashboard (QA Suite)
+
+Run `uvicorn server:app --port 8000` and explore:
+
+- **🧪 Live Testing** — Chat interface with real-time decision trace (intent, confidence, sentiment, cost)
+- **📊 Analytics** — Modal dashboard showing 24h metrics, KB gaps, escalations, pending KB suggestions, replay results
+- **🔒 Governance** — Modal showing current policy config and red-team test results
+- **Vertical switcher** — Test same router across E-Commerce, Banking, Telecom with different KBs and thresholds
 
 ---
 
@@ -265,31 +330,54 @@ python eval/evaluate.py                       # routing accuracy + confusion mat
 
 ## Repo layout
 
+### Core routing engine
 | Path | What it is |
 |---|---|
 | `config.py` | Taxonomy, thresholds, model slugs — single source of truth |
-| `src/pipeline.py` | Orchestrates all six layers |
+| `src/pipeline.py` | Orchestrates all six layers + case review integration |
 | `src/router.py` | Micro-intent router + deterministic safety overrides (the core) |
-| `src/agents/faq.py` | RAG-grounded FAQ (cite + abstain) |
+| `src/agents/faq.py` | RAG-grounded FAQ (cite + abstain), multi-vertical KB support |
 | `src/agents/empathy.py` | Tone-adaptive empathy agent |
-| `src/agents/transaction.py` | Order-grounded, HITL, policy + idempotency |
+| `src/agents/transaction.py` | Order-grounded, HITL, policy + idempotency + ownership checks + PII detection |
 | `src/agents/handoff.py` | Escalates with a briefing (never crashes) |
 | `src/agents/escalation_briefing.py` | Structured case brief for the human |
 | `src/policy.py` | Deterministic $2k auto-approve rules |
 | `src/idempotency.py` | Duplicate-request suppression |
 | `src/orders.py` + `data/orders.json` | Order system-of-record (id/value/owner) |
-| `src/guardrails.py` | PII redaction + input/output guardrails |
-| `src/rag.py` | Local vector store (swappable interface) |
+| `src/guardrails.py` | PII redaction + detection + input/output guardrails |
+| `src/rag.py` | Local vector store (swappable interface), multi-vertical indexing |
 | `src/logging_utils.py` | Structured JSON audit tracing |
 | `src/llm.py` | OpenRouter client wrapper (retry + graceful degradation) |
-| `server.py` + `web/index.html` | FastAPI chat dashboard |
+
+### Feedback loop (NEW)
+| Path | What it is |
+|---|---|
+| `src/case_review.py` | Captures failures from traces (FAQ abstentions, escalations, churn, guardrail blocks) |
+| `src/kb_suggestion.py` | Detects KB gaps, generates doc templates, accepts human-written answers |
+| `src/replay.py` | Batch replay with metrics (cost, latency, escalation rate, resolution rate) |
+| `src/governance.py` | Policy settings viewer + red-team test suite (6 security tests) |
+| `src/verticals.py` | Multi-vertical config (E-Commerce, Banking, Telecom with different KBs/thresholds) |
+| `data/case_review.jsonl` | Audit log of all failures (auto-generated, gitignored) |
+| `data/kb_suggestions.jsonl` | Pending + accepted KB suggestions (auto-generated, gitignored) |
+
+### Web dashboard (QA Suite UI)
+| Path | What it is |
+|---|---|
+| `server.py` | FastAPI backend; chat endpoint + analytics/governance/replay/red-team APIs |
+| `web/index.html` | Professional QA suite dashboard (orange theme): Live Testing tab + Analytics/Governance modals |
+
+### Utilities & scripts
+| Path | What it is |
+|---|---|
 | `run.py` | CLI single-message runner |
 | `demo.py` | 5-scenario presentation runner (`--replay`) |
 | `view_logs.py` | Pretty-print the audit log |
 | `eval/` | Test-set builder + router evaluation |
-| `scripts/build_kb.py` | Build the RAG index |
-| `data/knowledge_base/` | FAQ/policy docs (the RAG corpus) |
-| `customer_support_tickets.csv` | Sample tickets (synthetic, ~8.5k rows) |
+| `scripts/build_kb.py` | Build the RAG index for all verticals |
+| `data/knowledge_base/` | E-Commerce FAQ/policy docs (RAG corpus) |
+| `data/knowledge_base_banking/` | Banking FAQ docs (balance, transfers, etc.) |
+| `data/knowledge_base_telecom/` | Telecom FAQ docs (plans, billing, etc.) |
+| `customer_support_tickets.csv` | Sample tickets for replay testing (~50 rows) |
 
 ---
 
@@ -316,6 +404,7 @@ rm -f data/idempotency.json    # clear duplicate cache
 
 ## Honest limitations (know these before the panel asks)
 
+### Core system
 - **Latency** — ~6–20s per message (two sequential LLM calls over OpenRouter). Too slow
   for production voice/chat; the embedding router is the fix.
 - **No conversation memory** — routing is **per message**, not per conversation. A
@@ -325,7 +414,20 @@ rm -f data/idempotency.json    # clear duplicate cache
 - **Unmeasured accuracy** — the eval harness is scaffolded but not yet run on labeled
   data; don't quote accuracy numbers until it is.
 - **Synthetic data** — `customer_support_tickets.csv` is a Kaggle-style synthetic set;
-  the knowledge base is small and hand-written.
+  the knowledge bases are small and hand-written.
+
+### Feedback loop
+- **Case review is *post-hoc*** — failures are detected only after they happen. The
+  system doesn't predict gaps; it flags them after a customer hits them.
+- **Small KB** — the knowledge bases (3–5 docs per vertical) are toy-sized. Real
+  value appears at 100+ docs per vertical.
+- **No KB coverage metrics** — the system doesn't tell you "if you wrote answers to
+  these 10 questions, escalation rate would drop X%." Replay gives before/after;
+  predictive gap analysis is future work.
+- **Replay is slow** — 10 tickets takes 1–2 minutes (LLM API latency). For 1,000
+  tickets, add a better sampling strategy + caching.
+- **Red-team tests are manual** — the 6 tests are hard-coded; extending to 20 tests
+  requires code changes, not config.
 
 ---
 

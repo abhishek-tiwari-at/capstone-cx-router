@@ -7,35 +7,38 @@ hallucinate — it says so and the pipeline escalates.
 from __future__ import annotations
 
 from config import AGENT_MODEL
-from src import llm, rag
+from src import llm, rag, verticals
 from src.logging_utils import Trace
 
 _SYSTEM = (
     "You are a factual FAQ assistant. Answer the customer's question using ONLY "
     "the provided knowledge-base context. If the context does not contain the "
     "answer, reply exactly: 'INSUFFICIENT_CONTEXT'. Never use outside knowledge. "
-    "Cite the source filename(s) you used in square brackets at the end."
+    "Do NOT mention filenames or source document names."
 )
 
-_store: rag.VectorStore | None = None
+_stores: dict[str, rag.VectorStore] = {}
 
 
-def _get_store() -> rag.VectorStore:
-    global _store
-    if _store is None:
-        _store = rag.VectorStore.load()
-    return _store
+def _get_store(vertical: str = "ecommerce") -> rag.VectorStore:
+    global _stores
+    if vertical not in _stores:
+        try:
+            _stores[vertical] = rag.VectorStore.load(vertical=vertical)
+        except FileNotFoundError:
+            _stores[vertical] = rag.build_index_from_kb(vertical=vertical)
+    return _stores[vertical]
 
 
-def handle(message: str, trace: Trace) -> str:
-    hits = _get_store().search(message, k=3)
+def handle(message: str, trace: Trace, vertical: str = "ecommerce") -> str:
+    hits = _get_store(vertical).search(message, k=3)
     relevant = [h for h in hits if h.score >= rag.RELEVANCE_FLOOR]
 
     if not relevant:
         # Grounding guarantee: no relevant doc -> abstain, don't invent.
         raise AbstainError("no knowledge-base match above relevance floor")
 
-    context = "\n\n".join(f"[{h.doc.source}] {h.doc.text}" for h in relevant)
+    context = "\n\n".join(h.doc.text for h in relevant)
     user = f"Knowledge base context:\n{context}\n\nCustomer question: {message}"
     answer, in_tok, out_tok = llm.complete(AGENT_MODEL, _SYSTEM, user, max_tokens=600)
     trace.input_tokens += in_tok

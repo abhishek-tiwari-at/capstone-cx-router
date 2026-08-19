@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import pickle
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 
@@ -62,25 +63,37 @@ class VectorStore:
         top = np.argsort(scores)[::-1][:k]
         return [Retrieved(self.docs[i], float(scores[i])) for i in top]
 
-    def save(self) -> None:
-        KB_INDEX.parent.mkdir(parents=True, exist_ok=True)
-        with KB_INDEX.open("wb") as f:
+    def save(self, path: Path | None = None) -> None:
+        if path is None:
+            path = KB_INDEX
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("wb") as f:
             pickle.dump({"docs": self.docs, "matrix": self.matrix}, f)
 
+    def save_to(self, path) -> None:
+        self.save(path=path)
+
     @classmethod
-    def load(cls) -> "VectorStore":
-        with KB_INDEX.open("rb") as f:
+    def load(cls, vertical: str = "ecommerce") -> "VectorStore":
+        from src import verticals as v_mod
+        vc = v_mod.get_vertical(vertical)
+        kb_index = vc.kb_path.parent / f"kb_index_{vertical}.pkl"
+        with kb_index.open("rb") as f:
             blob = pickle.load(f)
         return cls(blob["docs"], blob["matrix"])
 
 
-def build_index_from_kb() -> VectorStore:
-    """Read every .md file in KB_DIR, embed, and persist the index."""
+def build_index_from_kb(vertical: str = "ecommerce") -> VectorStore:
+    """Read every .md file in vertical's KB_DIR, embed, and persist the index."""
+    from src import verticals as v_mod
+    vc = v_mod.get_vertical(vertical)
+    kb_path = vc.kb_path
     docs: list[Doc] = []
-    for path in sorted(KB_DIR.glob("*.md")):
+    for path in sorted(kb_path.glob("*.md")):
         docs.append(Doc(source=path.name, text=path.read_text().strip()))
     if not docs:
-        raise RuntimeError(f"No knowledge-base docs found in {KB_DIR}")
+        raise RuntimeError(f"No knowledge-base docs found in {kb_path}")
     store = VectorStore(docs, embed([d.text for d in docs]))
-    store.save()
+    kb_index = kb_path.parent / f"kb_index_{vertical}.pkl"
+    store.save_to(kb_index)
     return store

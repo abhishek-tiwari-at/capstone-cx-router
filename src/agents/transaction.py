@@ -69,6 +69,7 @@ def handle(message: str, trace: Trace, current_user: str | None = None) -> str:
 
     # Access control: if we know who is asking and they don't own the order, stop.
     if order and current_user and not orders.owns(order.order_id, current_user):
+        trace.agent = "handoff"
         trace.escalated = True
         trace.guardrail_blocks.append("ownership_mismatch")
         trace.outcome = f"blocked:ownership_mismatch:{order.order_id}"
@@ -85,8 +86,14 @@ def handle(message: str, trace: Trace, current_user: str | None = None) -> str:
     amount = order.value if order else action.amount
 
     risk_flags: list[str] = []
-    if guardrails.redact_pii(message) != message:
+    pii_found = guardrails.detect_pii(message)
+    if pii_found:
         risk_flags.append("pii_in_message")
+        trace.guardrail_blocks.extend(pii_found)
+        trace.agent = "handoff"
+        trace.escalated = True
+        return ("I detected sensitive payment information in your message. For security, "
+                "I'm connecting you with a specialist who can help you safely.")
 
     decision = policy.decide(action=action.action, amount=amount, risk_flags=risk_flags)
 

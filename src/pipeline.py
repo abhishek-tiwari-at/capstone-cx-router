@@ -10,7 +10,7 @@ show both the answer and the decision metadata.
 from __future__ import annotations
 
 from config import SENTIMENT_FASTTRACK, SENTIMENT_INTENSITY_THRESHOLD
-from src import guardrails, llm
+from src import guardrails, llm, case_review
 from src.agents import empathy, faq, handoff, transaction
 from src.logging_utils import Trace, trace_scope
 from src.router import route
@@ -19,7 +19,7 @@ AI_DISCLOSURE = "(You're chatting with an AI assistant.) "
 
 
 def handle_message(message: str, channel: str = "cli",
-                   current_user: str | None = None) -> tuple[str, Trace]:
+                   current_user: str | None = None, vertical: str = "ecommerce") -> tuple[str, Trace]:
     with trace_scope(channel=channel) as trace:
         trace.actor = current_user
         trace.redacted_input = guardrails.redact_pii(message)
@@ -53,7 +53,7 @@ def handle_message(message: str, channel: str = "cli",
             return _finalize(reply, trace)
 
         # --- Layer 3: dispatch to exactly one agent ---
-        reply = _dispatch(decision.intent, message, trace, decision.reason, current_user)
+        reply = _dispatch(decision.intent, message, trace, decision.reason, current_user, vertical)
 
         if trace.outcome is None:
             trace.finish(f"handled_by:{trace.agent}")
@@ -61,12 +61,12 @@ def handle_message(message: str, channel: str = "cli",
 
 
 def _dispatch(intent: str, message: str, trace: Trace, note: str,
-              current_user: str | None = None) -> str:
+              current_user: str | None = None, vertical: str = "ecommerce") -> str:
     trace.agent = intent
     try:
         if intent == "faq":
             try:
-                return faq.handle(message, trace)
+                return faq.handle(message, trace, vertical=vertical)
             except faq.AbstainError as e:
                 # Grounding abstain -> escalate with a brief.
                 trace.agent = "handoff"
@@ -92,4 +92,8 @@ def _finalize(reply: str, trace: Trace) -> tuple[str, Trace]:
         reply = ("I've noted your request and a specialist will confirm the details "
                  "with you shortly.")
     trace.redacted_response = guardrails.redact_pii(reply)
+
+    # --- Case review (tracks failures for improvement loop) ---
+    case_review.log_case_review(trace)
+
     return AI_DISCLOSURE + reply, trace
